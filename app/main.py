@@ -2,7 +2,7 @@ from fastapi import FastAPI
 
 from app.db import Base, engine
 from app.models import link
-from app.routers import links, redirect
+from app.routers import links, redirect, ui
 
 Base.metadata.create_all(engine)
 app = FastAPI()
@@ -14,4 +14,5 @@ def health():
 
 
 app.include_router(links.router)
+app.include_router(ui.router)
 app.include_router(redirect.router)

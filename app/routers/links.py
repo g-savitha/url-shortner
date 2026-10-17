@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.session import Session
 
+from app.cache import r
 from app.db import get_db
 from app.models.link import Link
-from app.schemas.link import LinkCreate, LinkOut
+from app.schemas.link import LinkCreate, LinkOut, LinkUpdate
 from app.services.codes import RESERVED, generate_code
 
 router = APIRouter(prefix="/api/links", tags=["links"])
@@ -36,3 +37,40 @@ def create_links(body: LinkCreate, db: Session = Depends(get_db)):
         original_url=link.original_url,
         expires_at=link.expires_at,
     )
+
+
+@router.patch("/{code}", response_model=LinkOut)
+def update_link(code: str, payload: LinkUpdate, db: Session = Depends(get_db)):
+    link = db.query(Link).filter(Link.code == code).first()
+    if link is None:
+        raise HTTPException(status_code=404, detail="Link Not found")
+
+    changes = payload.model_dump(exclude_unset=True)
+    for field, value in changes.items():
+        if field == "url":
+            link.original_url = str(value)
+        else:
+            setattr(link, field, value)
+
+    db.commit()
+    r.delete(f"link:{code}")
+    db.refresh(link)
+
+    return LinkOut(
+        code=link.code,
+        short_url=f"{BASE_URL}/{link.code}",
+        original_url=link.original_url,
+        expires_at=link.expires_at,
+    )
+
+
+@router.delete("/{code}", status_code=204)
+def delete_link(code: str, db: Session = Depends(get_db)):
+    link = db.query(Link).filter(Link.code == code).first()
+
+    if link is None:
+        raise HTTPException(status_code=404, detail="Link Not found")
+
+    db.delete(link)
+    db.commit()
+    r.delete(f"link:{code}")

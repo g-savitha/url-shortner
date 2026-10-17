@@ -14,3 +14,8 @@ class LinkOut(BaseModel):
     short_url: str
     original_url: str
     expires_at: datetime | None
+
+
+class LinkUpdate(BaseModel):
+    url: HttpUrl | None = None
+    expires_at: datetime | None = None

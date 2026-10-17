@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>URL Shortener</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background: #1a1a1a; }
+  </style>
+</head>
+<body class="min-h-screen text-zinc-100 antialiased">
+  <main class="mx-auto max-w-2xl px-4 py-10 space-y-8">
+    <header>
+      <h1 class="text-2xl font-semibold tracking-tight">URL Shortener</h1>
+      <p class="mt-1 text-sm text-zinc-400">Create, edit, and probe short links.</p>
+    </header>
+
+    <form id="create" class="space-y-3 rounded-lg bg-zinc-900 p-4 ring-1 ring-zinc-800">
+      <label class="block text-sm">
+        <span class="text-zinc-400">URL</span>
+        <input name="url" type="url" required placeholder="https://example.com"
+          class="mt-1 w-full rounded-md bg-zinc-800 px-3 py-2 text-sm outline-none ring-1 ring-zinc-700 focus:ring-zinc-500" />
+      </label>
+      <div class="grid gap-3 sm:grid-cols-2">
+        <label class="block text-sm">
+          <span class="text-zinc-400">Alias (optional)</span>
+          <input name="alias" pattern="[A-Za-z0-9_-]{3,16}" placeholder="my-link"
+            class="mt-1 w-full rounded-md bg-zinc-800 px-3 py-2 text-sm outline-none ring-1 ring-zinc-700 focus:ring-zinc-500" />
+        </label>
+        <label class="block text-sm">
+          <span class="text-zinc-400">Expires (optional)</span>
+          <input name="expires_at" type="datetime-local"
+            class="mt-1 w-full rounded-md bg-zinc-800 px-3 py-2 text-sm outline-none ring-1 ring-zinc-700 focus:ring-zinc-500" />
+        </label>
+      </div>
+      <button type="submit"
+        class="rounded-md bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-900 hover:bg-white">
+        Shorten
+      </button>
+    </form>
+
+    <div id="error" class="hidden rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-200 ring-1 ring-red-900"></div>
+    <div id="probe" class="hidden rounded-lg bg-zinc-900 px-3 py-2 text-sm text-zinc-300 ring-1 ring-zinc-800 font-mono"></div>
+
+    <section>
+      <h2 class="mb-3 text-sm font-medium uppercase tracking-wide text-zinc-500">This session</h2>
+      <ul id="list" class="space-y-3"></ul>
+      <p id="empty" class="text-sm text-zinc-500">No links yet.</p>
+    </section>
+  </main>
+
+  <script>
+    const KEY = "shortener.links";
+    const $ = (id) => document.getElementById(id);
+
+    function load() {
+      try { return JSON.parse(localStorage.getItem(KEY) || "[]"); }
+      catch { return []; }
+    }
+    function save(links) {
+      localStorage.setItem(KEY, JSON.stringify(links));
+    }
+    function upsert(link) {
+      const links = load().filter((l) => l.code !== link.code);
+      links.unshift(link);
+      save(links);
+      render();
+    }
+    function remove(code) {
+      save(load().filter((l) => l.code !== code));
+      render();
+    }
+
+    function toIso(local) {
+      if (!local) return null;
+      return new Date(local).toISOString();
+    }
+
+    function fmtDetail(detail) {
+      if (detail == null) return "";
+      if (typeof detail === "string") return detail;
+      if (Array.isArray(detail)) {
+        return detail.map((e) => {
+          const loc = (e.loc || []).filter((x) => x !== "body").join(".");
+          return loc ? `${loc}: ${e.msg}` : e.msg;
+        }).join("; ");
+      }
+      return JSON.stringify(detail);
+    }
+
+    async function api(method, path, body) {
+      const opts = { method, headers: {} };
+      if (body !== undefined) {
+        opts.headers["Content-Type"] = "application/json";
+        opts.body = JSON.stringify(body);
+      }
+      const res = await fetch(path, opts);
+      if (res.status === 204) return null;
+      let data = null;
+      try { data = await res.json(); } catch {}
+      if (!res.ok) {
+        const err = new Error(`${res.status}: ${fmtDetail(data?.detail) || res.statusText}`);
+        err.status = res.status;
+        throw err;
+      }
+      return data;
+    }
+
+    function showError(msg) {
+      const el = $("error");
+      if (!msg) { el.classList.add("hidden"); el.textContent = ""; return; }
+      el.textContent = msg;
+      el.classList.remove("hidden");
+    }
+
+    function showProbe(text) {
+      const el = $("probe");
+      el.textContent = text;
+      el.classList.toggle("hidden", !text);
+    }
+
+    function render() {
+      const links = load();
+      const list = $("list");
+      list.innerHTML = "";
+      $("empty").classList.toggle("hidden", links.length > 0);
+      for (const link of links) {
+        const li = document.createElement("li");
+        li.className = "rounded-lg bg-zinc-900 p-4 ring-1 ring-zinc-800 space-y-2";
+        const exp = link.expires_at ? new Date(link.expires_at).toLocaleString() : "never";
+        li.innerHTML = `
+          <div class="flex flex-wrap items-center gap-2">
+            <a href="${link.short_url}" class="font-mono text-sm text-zinc-100 hover:underline" target="_blank" rel="noopener">${link.short_url}</a>
+            <button data-act="copy" class="text-xs text-zinc-400 hover:text-zinc-200">copy</button>
+          </div>
+          <p class="truncate text-sm text-zinc-400" title="${link.original_url}">${link.original_url}</p>
+          <p class="text-xs text-zinc-500">expires: ${exp}</p>
+          <div class="flex flex-wrap gap-2 pt-1">
+            <button data-act="edit" class="rounded bg-zinc-800 px-2 py-1 text-xs hover:bg-zinc-700">edit</button>
+            <button data-act="delete" class="rounded bg-zinc-800 px-2 py-1 text-xs hover:bg-zinc-700">delete</button>
+            <button data-act="probe" class="rounded bg-zinc-800 px-2 py-1 text-xs hover:bg-zinc-700">test redirect</button>
+          </div>`;
+        li.querySelector('[data-act="copy"]').onclick = async () => {
+          await navigator.clipboard.writeText(link.short_url);
+        };
+        li.querySelector('[data-act="edit"]').onclick = () => editLink(link);
+        li.querySelector('[data-act="delete"]').onclick = () => deleteLink(link.code);
+        li.querySelector('[data-act="probe"]').onclick = () => probeLink(link.code);
+        list.appendChild(li);
+      }
+    }
+
+    async function editLink(link) {
+      showError();
+      const url = prompt("New URL", link.original_url);
+      if (url === null) return;
+      let expires_at = link.expires_at;
+      const raw = prompt("Expiry (ISO or blank to clear)", link.expires_at || "");
+      if (raw === null) return;
+      expires_at = raw.trim() === "" ? null : raw.trim();
+      const body = {};
+      if (url.trim()) body.url = url.trim();
+      body.expires_at = expires_at;
+      try {
+        const updated = await api("PATCH", `/api/links/${link.code}`, body);
+        upsert(updated);
+      } catch (e) {
+        showError(e.message);
+      }
+    }
+
+    async function deleteLink(code) {
+      showError();
+      try {
+        await api("DELETE", `/api/links/${code}`);
+        remove(code);
+      } catch (e) {
+        showError(e.message);
+      }
+    }
+
+    async function probeLink(code) {
+      showError();
+      try {
+        const r = await api("GET", `/ui/probe/${code}`);
+        showProbe(`status=${r.status}  x-cache=${r.x_cache ?? "—"}  location=${r.location ?? "—"}  ${r.ms}ms`);
+      } catch (e) {
+        showError(e.message);
+      }
+    }
+
+    $("create").onsubmit = async (ev) => {
+      ev.preventDefault();
+      showError();
+      const fd = new FormData(ev.target);
+      const body = { url: fd.get("url") };
+      const alias = (fd.get("alias") || "").trim();
+      if (alias) body.alias = alias;
+      const exp = toIso(fd.get("expires_at"));
+      if (exp) body.expires_at = exp;
+      try {
+        const link = await api("POST", "/api/links", body);
+        upsert(link);
+        ev.target.reset();
+      } catch (e) {
+        showError(e.message);
+      }
+    };
+
+    render();
+  </script>
+</body>
+</html>

@@ -36,6 +36,10 @@ make dev                # start the API at http://localhost:8000
 
 Interactive API docs: http://localhost:8000/docs
 
+## Playground UI
+
+Open http://localhost:8000 for a minimal dark UI to create links, edit/delete them (session list in `localStorage`), and test redirects via `GET /ui/probe/{code}` (returns status, `X-Cache`, `Location`, and latency — browser `fetch` with `redirect: 'manual'` hides these).
+
 ## Make commands
 
 | Command             | What it does                       |
@@ -110,7 +114,9 @@ app/
 ├── schemas/link.py   # Pydantic request/response models
 ├── routers/
 │   ├── links.py      # POST /api/links
+│   ├── ui.py         # GET / playground, GET /ui/probe/{code}
 │   └── redirect.py   # GET /{code}
+├── static/index.html # playground UI
 └── services/codes.py # code generation, reserved words
 ```
 

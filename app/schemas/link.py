@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, HttpUrl
 
 class LinkCreate(BaseModel):
     url: HttpUrl
-    alias: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{3,16}$")
+    alias: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{8,16}$")
     expires_at: datetime | None = None
 
 

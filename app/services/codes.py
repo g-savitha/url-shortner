@@ -1,9 +1,9 @@
-import secrets
-import string
+from sqids import Sqids
 
-ALPHABET = string.ascii_letters + string.digits
 RESERVED = {"api", "docs", "health", "openapi.json", "redoc", "ui"}
 
+_sqids = Sqids(min_length=7)
 
-def generate_code(length: int = 7) -> str:
-    return "".join(secrets.choice(ALPHABET) for _ in range(length))
+
+def encode_id(n: int) -> str:
+    return _sqids.encode([n])

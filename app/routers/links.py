@@ -3,6 +3,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.session import Session
 
 from app.cache import r
+from app.config import settings
 from app.db import get_db
 from app.models.link import Link
 from app.schemas.link import LinkCreate, LinkOut, LinkUpdate
@@ -10,7 +11,7 @@ from app.services.codes import RESERVED, encode_id
 
 router = APIRouter(prefix="/api/links", tags=["links"])
 
-BASE_URL = "http://localhost:8000"
+BASE_URL = settings.base_url
 
 
 @router.post("", response_model=LinkOut, status_code=201)

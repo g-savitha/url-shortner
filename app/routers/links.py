@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.session import Session
 
@@ -14,13 +14,26 @@ BASE_URL = "http://localhost:8000"
 
 
 @router.post("", response_model=LinkOut, status_code=201)
-def create_links(body: LinkCreate, db: Session = Depends(get_db)):
+def create_links(body: LinkCreate, request: Request, db: Session = Depends(get_db)):
+    # rate limiting
+
+    client_host = request.client.host if request.client is not None else "unknown"
+    key = f"rate:{client_host}"
+    count = r.incr(key)
+    if r.ttl(key) == -1:
+        r.expire(key, 60)
+    if count > 10:
+        raise HTTPException(429, "Too many requests, slow down")
+
+    # create link
+
     if body.alias and body.alias.lower() in RESERVED:
         raise HTTPException(400, "That alias is reserved")
 
     link = Link(
         code=body.alias or "tmp", original_url=str(body.url), expires_at=body.expires_at
     )
+
     db.add(link)
     try:
         db.flush()
